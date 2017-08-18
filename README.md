@@ -49,3 +49,5 @@ Upgrade instructions
 To upgrade Akeneo PIM to a newer version, please follow:
 http://docs.akeneo.com/1.7/developer_guide/migration/index.html
 
+This porject has been customized for 1001Pharmacies needs.
+You may want to follow [these instructions](README_1001Pharmacies.md) to install the project instead of the current README.

@@ -15,6 +15,7 @@ app/uploads/product/*
 app/file_storage/*
 app/bootstrap.php.cache
 build/
+pim-project
 vendor
 composer.phar
 composer.lock
