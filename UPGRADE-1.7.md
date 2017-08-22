@@ -8,6 +8,7 @@
 - [Migrate your standard project](#migrate-your-standard-project)
 - [Migrate your custom code](#migrate-your-custom-code)
   - [Structured normalizers to Standard Normalizers](#structured-normalizers-to-standard-normalizers)
+  - [Array converters](#array-converters)
   - [Import/export UI migration](#importexport-ui-migration)
   - [Update references to business reader classes that have been moved](#update-references-to-business-reader-classes-that-have-been-moved)
   - [Versioning formats](#versioning-formats)
@@ -33,161 +34,163 @@
 
 ## Migrate your standard project
 
-1. Download it from the website [PIM community standard](http://www.akeneo.com/download/) and extract:
+1. Download and extract the latest standard archive,
 
-    ```bash
-    wget http://download.akeneo.com/pim-community-standard-v1.7-latest.tar.gz
-    tar -zxf pim-community-standard-v1.7-latest.tar.gz
-    cd pim-community-standard/
-    ```
+  * Download it from the website [PIM community standard](http://www.akeneo.com/download/) and extract:
+
+```bash
+wget http://download.akeneo.com/pim-community-standard-v1.7-latest.tar.gz
+tar -zxf pim-community-standard-v1.7-latest.tar.gz
+cd pim-community-standard/
+```
 
 2. Copy the following files to your PIM installation:
 
-    ```bash
-    export PIM_DIR=/path/to/your/pim/installation
-    cp app/SymfonyRequirements.php $PIM_DIR/app
-    cp app/PimRequirements.php $PIM_DIR/app
+```bash
+export PIM_DIR=/path/to/your/pim/installation
+cp app/SymfonyRequirements.php $PIM_DIR/app
+cp app/PimRequirements.php $PIM_DIR/app
 
-    mv $PIM_DIR/app/config/pim_parameters.yml $PIM_DIR/app/config/pim_parameters.yml.bak
-    cp app/config/pim_parameters.yml $PIM_DIR/app/config
+mv $PIM_DIR/app/config/pim_parameters.yml $PIM_DIR/app/config/pim_parameters.yml.bak
+cp app/config/pim_parameters.yml $PIM_DIR/app/config
 
-    mv $PIM_DIR/composer.json $PIM_DIR/composer.json.bak
-    cp composer.json $PIM_DIR/
-    ```
+mv $PIM_DIR/composer.json $PIM_DIR/composer.json.bak
+cp composer.json $PIM_DIR/
+```
 
 3. Update the configuration of your application `$PIM_DIR/app/config/config.yml` to add these new lines:
 
-    ```YAML
-    # FOSOAuthServer Configuration
-    fos_oauth_server:
-        db_driver:                orm
-        client_class:             Pim\Bundle\ApiBundle\Entity\Client
-        access_token_class:       Pim\Bundle\ApiBundle\Entity\AccessToken
-        refresh_token_class:      Pim\Bundle\ApiBundle\Entity\RefreshToken
-        auth_code_class:          Pim\Bundle\ApiBundle\Entity\AuthCode
-        service:
-            user_provider:        pim_user.provider.user
-    ```
+```YAML
+# FOSOAuthServer Configuration
+fos_oauth_server:
+    db_driver:                orm
+    client_class:             Pim\Bundle\ApiBundle\Entity\Client
+    access_token_class:       Pim\Bundle\ApiBundle\Entity\AccessToken
+    refresh_token_class:      Pim\Bundle\ApiBundle\Entity\RefreshToken
+    auth_code_class:          Pim\Bundle\ApiBundle\Entity\AuthCode
+    service:
+        user_provider:        pim_user.provider.user
+```
 
 4. Update the security configuration `$PIM_DIR/app/config/security.yml`:
 
-    Add these new lines under `security.firewalls`:
+    Add these new lines under `security.firewalls`, before `security.firewalls.main`:
    
-    ```YAML
-    oauth_token:
-        pattern:                        ^/api/oauth/v1/token
-        security:                       false
-    api_index:
-        pattern:                        ^/api/rest/v1$
-        security:                       false
-    api:
-        pattern:                        ^/api
-        fos_oauth:                      true
-        stateless:                      true
-        access_denied_handler:          pim_api.security.access_denied_handler
-    ```
+```YAML
+oauth_token:
+    pattern:                        ^/api/oauth/v1/token
+    security:                       false
+api_index:
+    pattern:                        ^/api/rest/v1$
+    security:                       false
+api:
+    pattern:                        ^/api
+    fos_oauth:                      true
+    stateless:                      true
+    access_denied_handler:          pim_api.security.access_denied_handler
+```
 
-    Add these new lines under `security.access_control`:
-    
-    ```YAML
-    - { path: ^/api/rest/v1$, role: IS_AUTHENTICATED_ANONYMOUSLY }
-    - { path: ^/api/, role: pim_api_overall_access }
-    ```
+Do note that if you don't add these lines __before__ `security.firewalls.main`, you will not be able to access to the API.
 
-    Remove these lines under `security.firewalls`:
+  Add these new lines under `security.access_control`:
     
-    ```YAML
-    wsse_secured:
-        pattern:                        ^/api/(rest|soap).*
-        wsse:
-            lifetime:                   3600
-            realm:                      "Secured API"
-            profile:                    "UsernameToken"
-        context:                        main
-    ```
+```YAML
+- { path: ^/api/rest/v1$, role: IS_AUTHENTICATED_ANONYMOUSLY }
+- { path: ^/api/, role: pim_api_overall_access }
+```
+
+  Remove these lines under `security.firewalls`:
+    
+```YAML
+wsse_secured:
+    pattern:                        ^/api/(rest|soap).*
+    wsse:
+        lifetime:                   3600
+        realm:                      "Secured API"
+        profile:                    "UsernameToken"
+    context:                        main
+```
 
 5. Update your application Kernel `$PIM_DIR/app/AppKernel.php`:
 
-    * Remove the following bundles:
+  * Remove the following bundles:
 
-    ```PHP
-    Oro\Bundle\UIBundle\OroUIBundle,
-    Oro\Bundle\FormBundle\OroFormBundle,
-    Pim\Bundle\WebServiceBundle\PimWebServiceBundle,
-    ```
+```PHP
+Oro\Bundle\UIBundle\OroUIBundle,
+Oro\Bundle\FormBundle\OroFormBundle,
+Pim\Bundle\WebServiceBundle\PimWebServiceBundle,
+```
+  * Add `FOSOAuthServerBundle` in the following function:
+   
+    - `getPimDependenciesBundles()`:
+```PHP
+new FOS\OAuthServerBundle\FOSOAuthServerBundle()
+```
 
-    * Add the following bundles in the following functions:
-
-        - `getPimDependenciesBundles()`:
-
-          ```PHP
-          new FOS\OAuthServerBundle\FOSOAuthServerBundle()
-          ```
-
-        - `getPimBundles()`:
-
-          ```PHP
-          new Pim\Bundle\ApiBundle\PimApiBundle()
-          ```
+  * And add `PimApiBundle` in the following function:
+   
+    - `getPimBundles()`:
+```PHP
+new Pim\Bundle\ApiBundle\PimApiBundle()
+```
 
 6. Update your routing configuration `$PIM_DIR/app/config/routing.yml`:
 
-    * Remove the following lines:
+  * Remove the following lines:
 
-    ```YAML
-    pim_webservice:
-        resource: "@PimWebServiceBundle/Resources/config/routing.yml"
-    ```
+```YAML
+pim_webservice:
+    resource: "@PimWebServiceBundle/Resources/config/routing.yml"
+```
 
-    * Add the following lines:
+  * Add the following lines:
 
-    ```YAML
-    pim_api:
-        resource: "@PimApiBundle/Resources/config/routing.yml"
-        prefix: /api
-    ```
+```YAML
+pim_api:
+    resource: "@PimApiBundle/Resources/config/routing.yml"
+    prefix: /api
+```
 
 7. Then remove your old upgrades folder:
 
-    ```bash
-    rm -rf $PIM_DIR/upgrades/schema
-    ```
+```bash
+rm -rf $PIM_DIR/upgrades/schema
+```
 
 8. Now update your dependencies:
 
-    * [Optional] If you had added dependencies to your project, you will need to do it again in your `composer.json`.
-      You can display the differences of your previous composer.json in `$PIM_DIR/composer.json.bak`.
+  * [Optional] If you had added dependencies to your project, you will need to do it again in your `composer.json`.
+    You can display the differences of your previous composer.json in `$PIM_DIR/composer.json.bak`.
 
-        ```JSON
-        "require": {
-            "your/dependency": "version",
-            "your/other-dependency": "version",
-        }
-        ```
+```JSON
+"require": {
+    "your/dependency": "version",
+    "your/other-dependency": "version",
+}
+```
 
-    * Then run the command to update your dependencies:
+  * Then run the command to update your dependencies:
+```bash
+php -d memory_limit=3G composer update
+```
 
-        ```bash
-        php -d memory_limit=3G composer update
-        ```
-
-        This step will copy the upgrades folder from `pim-community-dev/` to your Pim project root in order to migrate.
-        If you have custom code in your project, this step may raise errors in the "post-script" command.
-        In this case, go to the chapter "Migrate your custom code" before running the database migration.
+  This step will copy the upgrades folder from `pim-community-dev/` to your Pim project root in order to migrate.
+  If you have custom code in your project, this step may raise errors in the "post-script" command.
+  In this case, go to the chapter "Migrate your custom code" before running the database migration.
 
 9. Then you can migrate your database using:
 
-    ```bash
-    rm -rf app/cache/*
-    php app/console doctrine:migration:migrate --env=prod
-    ```
+```bash
+php app/console cache:clear --env=prod
+php app/console doctrine:migration:migrate --env=prod
+```
 
 10. Then, generate JS translations and re-generate the PIM assets:
 
-    ```bash
-    rm -rf $PIM_DIR/web/js/translation/*
-    php app/console pim:installer:assets
-    ```
+```bash
+rm -rf $PIM_DIR/web/js/translation/*
+php app/console pim:installer:assets
+```
 
 ## Migrate your custom code
 
@@ -284,6 +287,12 @@ In order to use the right one, a proxy group normalizer
 [`Pim\Component\Catalog\Normalizer\Standard\ProxyGroupNormalizer`](https://github.com/akeneo/pim-community-dev/blob/1.7/src/Pim/Component/Catalog/Normalizer/Standard/ProxyGroupNormalizer.php)
 has been created. This proxy normalizer will be used instead of `Pim\Component\Catalog\Normalizer\Structured\GroupNormalizer`.
 
+### Array Converters
+
+To be able to use the standard format during import, we removed the generic `Pim\Component\Connector\ArrayConverter\FlatToStandard\Product\ValueConverter\ScalarConverter`
+in favor of `BooleanConverter`, `DateConverter` and `NumberConverter` classes.
+With that, imported data can be transformed as the [standard format](https://docs.akeneo.com/1.7/reference/standard_format/index.html) expect.
+
 ### Import/export UI migration
 
 With this 1.7 edition, we migrated the old import/export configuration screens to new javascript architecture. It means
@@ -304,7 +313,6 @@ services:
     acme.job_parameters.form_configuration_provider.simple_csv_import:
         class: '%pim_import_export.job_parameters.form_configuration_provider.simple_csv_import.class%'
         arguments:
-            - '@pim_import_export.job_parameters.form_configuration_provider.simple_csv_import'
             -
                 - 'my_custom_import_job_name'
         tags:
